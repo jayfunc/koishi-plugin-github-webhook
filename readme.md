@@ -14,8 +14,10 @@
 
 ## 📦 安装
 
+此插件尚未发布到 npm，请使用 git 安装：
+
 ```bash
-npm install koishi-plugin-github-webhook-pro
+npm install github:jayfunc/koishi-plugin-github-webhook
 ```
 
 > ⚠️ **注意**：本插件依赖 `puppeteer` 服务用于渲染 Release 图片。请确保你已安装并配置了 `koishi-plugin-puppeteer`。
