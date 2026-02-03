@@ -15,7 +15,10 @@
     "koishi",
     "plugin"
   ],
-  "devDependencies": {},
+  "devDependencies": {
+    "@cordisjs/plugin-server": "^0.2.9",
+    "@koishijs/plugin-server": "^3.2.7"
+  },
   "peerDependencies": {
     "koishi": "^4.18.7"
   }
