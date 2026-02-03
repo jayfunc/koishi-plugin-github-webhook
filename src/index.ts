@@ -1,64 +1,77 @@
-import { Context, Schema, h } from 'koishi'
-import * as crypto from 'crypto'
+import { Context, Schema, h } from "koishi";
+import * as crypto from "crypto";
 
-declare module 'koishi' {
+declare module "koishi" {
   interface Context {
-    server: any,
-    puppeteer: any
+    server: any;
+    puppeteer: any;
   }
 }
 
-export const name = 'github-webhook-pro'
-export const inject = ['server', 'puppeteer']
+export const name = "github-webhook-pro";
+export const inject = ["server", "puppeteer"];
 
 export interface Config {
-  path: string
-  secret: string
-  repos: Record<string, string[]>
-  truncateLength: number
-  starThreshold: number
+  path: string;
+  secret: string;
+  repos: Record<string, string[]>;
+  truncateLength: number;
+  starThreshold: number;
 }
 
 export const Config: Schema<Config> = Schema.object({
-  path: Schema.string().default('/github/webhook').description('Webhook 监听路径'),
-  secret: Schema.string().role('secret').description('GitHub Webhook Secret (在 GitHub 设置中填写)'),
-  repos: Schema.dict(Schema.array(Schema.string())).description('仓库映射: 键为 owner/repo，值为 [平台:群号] 列表'),
-  truncateLength: Schema.number().default(200).description('正文预览截断长度'),
-  starThreshold: Schema.number().default(1).description('Star 通知阈值：只有当 Star 总数是此数值的倍数时才发送通知。')
-})
+  path: Schema.string()
+    .default("/github/webhook")
+    .description("Webhook 监听路径"),
+  secret: Schema.string()
+    .role("secret")
+    .description("GitHub Webhook Secret (在 GitHub 设置中填写)"),
+  repos: Schema.dict(Schema.array(Schema.string())).description(
+    "仓库映射: 键为 owner/repo，值为 [平台:群号] 列表",
+  ),
+  truncateLength: Schema.number().default(200).description("正文预览截断长度"),
+  starThreshold: Schema.number()
+    .default(1)
+    .description("Star 通知阈值：只有当 Star 总数是此数值的倍数时才发送通知。"),
+});
 
 export function apply(ctx: Context, config: Config) {
   // 验证签名
   const verifySignature = (payload: string, signature: string) => {
-    if (!config.secret) return true
-    const hmac = crypto.createHmac('sha256', config.secret)
-    const digest = 'sha256=' + hmac.update(payload).digest('hex')
-    return crypto.timingSafeEqual(Buffer.from(digest), Buffer.from(signature))
-  }
+    if (!config.secret) return true;
+    const hmac = crypto.createHmac("sha256", config.secret);
+    const digest = "sha256=" + hmac.update(payload).digest("hex");
+    return crypto.timingSafeEqual(Buffer.from(digest), Buffer.from(signature));
+  };
 
   // 截断文本
   const truncate = (text: string) => {
-    if (!text) return '无内容'
-    const cleanText = text.replace(/\r\n/g, '\n').trim()
-    return cleanText.length > config.truncateLength ? cleanText.substring(0, config.truncateLength) + '...' : cleanText
-  }
+    if (!text) return "无内容";
+    const cleanText = text.replace(/\r\n/g, "\n").trim();
+    return cleanText.length > config.truncateLength
+      ? cleanText.substring(0, config.truncateLength) + "..."
+      : cleanText;
+  };
 
   // 路由处理
   ctx.server.post(config.path, async (c) => {
-    const headers = c.headers || c.req?.header || {}
-    const eventType = headers['x-github-event'] || headers['X-Github-Event']
-    const signature = (headers['x-hub-signature-256'] || headers['X-Hub-Signature-256']) as string
+    const headers = c.headers || c.req?.header || {};
+    const eventType = headers["x-github-event"] || headers["X-Github-Event"];
+    const signature = (headers["x-hub-signature-256"] ||
+      headers["X-Hub-Signature-256"]) as string;
 
-    let payload = c.request?.body
-    if (!payload && c.req && typeof c.req.json === 'function') {
-      try { payload = await c.req.json() } catch (e) {}
+    let payload = c.request?.body;
+    if (!payload && c.req && typeof c.req.json === "function") {
+      try {
+        payload = await c.req.json();
+      } catch (e) {}
     }
 
     // --- 修复点 1：Payload 校验 ---
     if (!payload) {
-      c.status = 400
-      c.body = 'Invalid Payload'
-      return
+      c.status = 400;
+      c.body = "Invalid Payload";
+      return;
     }
 
     if (config.secret && !verifySignature(JSON.stringify(payload), signature)) {
@@ -66,120 +79,230 @@ export function apply(ctx: Context, config: Config) {
       // c.status = 403; c.body = 'Signature mismatch'; return;
     }
 
-    const repoName = payload.repository?.full_name
+    const repoName = payload.repository?.full_name;
 
     // --- 修复点 2：仓库配置校验 ---
     if (!repoName || !config.repos[repoName]) {
-      c.status = 200
-      c.body = 'Repository not configured'
-      return
+      c.status = 200;
+      c.body = "Repository not configured";
+      return;
     }
 
-    let message: any = null
+    let message: any = null;
 
     try {
       switch (eventType) {
-        case 'issues':
-          message = handleIssue(payload, config)
-          break
-        case 'pull_request':
-          message = handlePullRequest(payload, config)
-          break
-        case 'release':
-          message = await handleRelease(payload, config, ctx)
-          break
-        case 'star':
-        case 'watch':
-          message = handleStar(payload, config)
-          break
+        case "issues":
+          message = handleIssue(payload, config);
+          break;
+        case "pull_request":
+          message = handlePullRequest(payload, config);
+          break;
+        case "release":
+          message = await handleRelease(payload, config, ctx);
+          break;
+        case "star":
+        case "watch":
+          message = handleStar(payload, config);
+          break;
         default:
-          break
+          break;
       }
     } catch (e) {
-      console.error('Error parsing GitHub webhook:', e)
+      console.error("Error parsing GitHub webhook:", e);
     }
 
     if (message) {
-      const targets = config.repos[repoName]
+      const targets = config.repos[repoName];
       for (const target of targets) {
-        const [platform, channelId] = target.split(':')
+        const [platform, channelId] = target.split(":");
         if (platform && channelId) {
-          const bot = ctx.bots.find(b => b.platform === platform)
+          const bot = ctx.bots.find((b) => b.platform === platform);
           if (bot) {
-            await bot.sendMessage(channelId, message)
+            await bot.sendMessage(channelId, message);
           } else {
-            await ctx.broadcast([target], message)
+            await ctx.broadcast([target], message);
           }
         }
       }
     }
 
     // --- 修复点 3：返回成功状态 ---
-    c.status = 200
-    c.body = 'OK'
-    return
-  })
+    c.status = 200;
+    c.body = "OK";
+    return;
+  });
+
+  // --- 测试指令 (新增) ---
+  // 仅超级管理员可用 (authority: 4) 或者你可以去掉这个 check
+
+  const cmd = ctx.command("github", "GitHub Webhook 测试工具").alias("gh");
+
+  cmd
+    .subcommand(".test-issue [repo:string]", "模拟 Issue 事件")
+    .action(async ({ session }, repo = "koishi/test-repo") => {
+      await session.send("正在生成测试 Issue...");
+      const payload = {
+        action: "opened",
+        repository: { full_name: repo },
+        issue: {
+          number: Math.floor(Math.random() * 1000),
+          title: "这是一个测试 Issue 标题",
+          html_url: `https://github.com/${repo}/issues/1`,
+          body: "这是一段测试内容。\n\n这里有一些详细的描述，用于测试截断功能是否正常工作。",
+        },
+        sender: { login: session.username || "TestUser" },
+      };
+      const msg = handleIssue(payload, config);
+      return msg || "生成失败";
+    });
+
+  cmd
+    .subcommand(".test-pr [repo:string]", "模拟 PR 事件")
+    .action(async ({ session }, repo = "koishi/test-repo") => {
+      await session.send("正在生成测试 PR...");
+      const payload = {
+        action: "opened",
+        repository: { full_name: repo },
+        pull_request: {
+          number: Math.floor(Math.random() * 1000),
+          title: "Feat: 添加了一个很酷的新功能",
+          html_url: `https://github.com/${repo}/pull/1`,
+          head: { ref: "feat/new-ui" },
+          base: { ref: "main" },
+          body: "这里是 PR 的详细描述...\n- 修改了 A\n- 修复了 B",
+        },
+        sender: { login: session.username || "TestUser" },
+      };
+      const msg = handlePullRequest(payload, config);
+      return msg || "生成失败";
+    });
+
+  cmd
+    .subcommand(
+      ".test-release [repo:string]",
+      "模拟 Release 事件 (测试图片渲染)",
+    )
+    .action(async ({ session }, repo = "koishi/test-repo") => {
+      await session.send("正在渲染 Release 图片，请稍候...");
+      const payload = {
+        action: "published",
+        repository: { full_name: repo },
+        release: {
+          tag_name: "v1.0.0",
+          name: "v1.0.0 - Major Update",
+          html_url: `https://github.com/${repo}/releases/tag/v1.0.0`,
+          published_at: new Date().toISOString(),
+          // 这里写一段长一点的 Markdown 来测试渲染效果
+          body: `
+## 🎉 新特性
+- 支持了 **Puppeteer** 图片渲染
+- 增加了 Webhook 签名验证
+- 优化了代码结构
+
+## 🐛 修复
+- 修复了 Context 类型报错的问题
+- 修复了字体显示模糊的问题
+
+## 📝 详细说明
+这是一段很长的测试文本，用于测试图片生成的高度自适应能力。
+\`\`\`javascript
+console.log("Hello Koishi");
+\`\`\`
+          `,
+        },
+        sender: { login: "TestUser" },
+      };
+      // 注意：这里需要传入 ctx
+      const msg = await handleRelease(payload, config, ctx);
+      return msg || "渲染失败，请检查日志";
+    });
+
+  cmd
+    .subcommand(".test-star [repo:string] [count:number]", "模拟 Star 事件")
+    .action(async ({ session }, repo = "koishi/test-repo", count = 10) => {
+      const payload = {
+        action: "created",
+        repository: {
+          full_name: repo,
+          stargazers_count: count,
+          html_url: `https://github.com/${repo}`,
+        },
+        sender: { login: session.username || "TestUser" },
+      };
+      // 临时修改阈值以确保能触发，或者用户自己输入满足阈值的数字
+      // 这里为了测试方便，强制认为命中
+      const originalThreshold = config.starThreshold;
+      config.starThreshold = 1;
+      const msg = handleStar(payload, config);
+      config.starThreshold = originalThreshold; // 恢复
+      return msg || "未触发通知（可能未达到阈值）";
+    });
 
   // --- 处理函数 ---
 
   function handleIssue(payload: any, config: Config) {
-    const { action, issue, repository, sender } = payload
-    if (!['opened', 'closed', 'reopened'].includes(action)) return null
+    const { action, issue, repository, sender } = payload;
+    if (!["opened", "closed", "reopened"].includes(action)) return null;
 
     const statusMap: Record<string, string> = {
-      opened: '已开启',
-      closed: '已关闭',
-      reopened: '已重新开启'
-    }
-    const statusCN = statusMap[action] || action
+      opened: "已开启",
+      closed: "已关闭",
+      reopened: "已重新开启",
+    };
+    const statusCN = statusMap[action] || action;
 
-    return h('message', [
+    return h("message", [
       h.text(`[Issue 动态] ${repository.full_name} #${issue.number}`),
       h.text(`\n标题: ${issue.title}`),
       h.text(`\n状态: ${statusCN}`),
       h.text(`\n提交者: ${sender.login}`),
       h.text(`\n链接: ${issue.html_url}`),
-      action === 'opened' ? h.text(`\n\n=== 内容摘要 ===\n${truncate(issue.body)}`) : null
-    ])
+      action === "opened"
+        ? h.text(`\n\n=== 内容摘要 ===\n${truncate(issue.body)}`)
+        : null,
+    ]);
   }
 
   function handlePullRequest(payload: any, config: Config) {
-    const { action, pull_request, repository, sender } = payload
+    const { action, pull_request, repository, sender } = payload;
 
-    let statusCN = ''
-    if (action === 'opened') {
-      statusCN = '已开启'
-    } else if (action === 'reopened') {
-      statusCN = '已重新开启'
-    } else if (action === 'closed') {
-      statusCN = pull_request.merged ? '已合并 (Merged)' : '已关闭 (未合并)'
+    let statusCN = "";
+    if (action === "opened") {
+      statusCN = "已开启";
+    } else if (action === "reopened") {
+      statusCN = "已重新开启";
+    } else if (action === "closed") {
+      statusCN = pull_request.merged ? "已合并 (Merged)" : "已关闭 (未合并)";
     } else {
-      return null
+      return null;
     }
 
-    return h('message', [
+    return h("message", [
       h.text(`[合并请求 PR] ${repository.full_name} #${pull_request.number}`),
       h.text(`\n标题: ${pull_request.title}`),
       h.text(`\n分支: ${pull_request.head.ref} -> ${pull_request.base.ref}`),
       h.text(`\n状态: ${statusCN}`),
       h.text(`\n操作者: ${sender.login}`),
       h.text(`\n链接: ${pull_request.html_url}`),
-      action === 'opened' ? h.text(`\n\n=== 内容摘要 ===\n${truncate(pull_request.body)}`) : null
-    ])
+      action === "opened"
+        ? h.text(`\n\n=== 内容摘要 ===\n${truncate(pull_request.body)}`)
+        : null,
+    ]);
   }
 
-    async function handleRelease(payload: any, config: Config, ctx: Context) {
-    const { action, release, repository, sender } = payload
-    if (action !== 'published') return null
+  async function handleRelease(payload: any, config: Config, ctx: Context) {
+    const { action, release, repository, sender } = payload;
+    if (action !== "published") return null;
 
     // 1. 数据准备
-    const tagName = release.tag_name
-    const repoName = repository.full_name
-    const title = release.name || tagName
-    const author = sender.login
-    const body = release.body || '*(No description provided)*'
-    const url = release.html_url
-    const publishedAt = new Date(release.published_at).toLocaleString('zh-CN')
+    const tagName = release.tag_name;
+    const repoName = repository.full_name;
+    const title = release.name || tagName;
+    const author = sender.login;
+    const body = release.body || "*(No description provided)*";
+    const url = release.html_url;
+    const publishedAt = new Date(release.published_at).toLocaleString("zh-CN");
 
     // 2. 渲染 HTML (使用 CDN 引入 Markdown 渲染器和 CSS)
     const html = `
@@ -191,8 +314,9 @@ export function apply(ctx: Context, config: Config) {
       <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
       <style>
         body {
-          background: #fff; padding: 20px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-          width: 800px; /* 固定宽度，防止图片过宽 */
+          background: #fff; padding: 20px;
+          font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "WenQuanYi Micro Hei", sans-serif;
+          width: 800px;
         }
         .header { border-bottom: 1px solid #eaecef; padding-bottom: 16px; margin-bottom: 24px; }
         .repo-name { font-size: 20px; color: #586069; margin-bottom: 8px; }
@@ -223,51 +347,55 @@ export function apply(ctx: Context, config: Config) {
       </script>
     </body>
     </html>
-    `
+    `;
 
     // 3. 使用 Puppeteer 截图
-    let imgBuf: Buffer
+    let imgBuf: Buffer;
     try {
       imgBuf = await ctx.puppeteer.render(html, async (page, next) => {
         // 设置视口
-        await page.setViewport({ width: 840, height: 100 })
+        await page.setViewport({
+          width: 840,
+          height: 100,
+          devicePixelRatio: 2,
+        });
         // 等待页面渲染（尤其是 marked.js 执行）
-        await page.waitForSelector('#content', { timeout: 10000 })
+        await page.waitForSelector("#content", { timeout: 10000 });
         // 截图整个 body
-        const element = await page.$('body')
-        return await element.screenshot({ type: 'png', encoding: 'binary' })
-      })
+        const element = await page.$("body");
+        return await element.screenshot({ type: "png", encoding: "binary" });
+      });
     } catch (e) {
-      console.error('Render Error:', e)
-      return h.text(`⚠️ 图片渲染失败，请查看后台日志。\n版本: ${tagName}`)
+      console.error("Render Error:", e);
+      return h.text(`⚠️ 图片渲染失败，请查看后台日志。\n版本: ${tagName}`);
     }
 
     // 4. 返回消息结构
     // h.at('all') 必须放在最前面
-    return h('message', [
-      h.at('all'),
-      h.text('\n'), // 换行，稍微美观点
+    return h("message", [
+      h.at("all"),
+      h.text("\n"), // 换行，稍微美观点
       h.text(`🚀 [新版本发布] ${repository.full_name}`),
       h.text(`\n版本号: ${release.tag_name}`),
-      h.image(imgBuf, 'image/png'),
-      h.text(`\n🔗 Release 链接: ${url}`)
-    ])
+      h.image(imgBuf, "image/png"),
+      h.text(`\n🔗 Release 链接: ${url}`),
+    ]);
   }
 
   function handleStar(payload: any, config: Config) {
-    if (payload.action !== 'created') return null
+    if (payload.action !== "created") return null;
 
-    const count = payload.repository.stargazers_count
-    const sender = payload.sender.login
-    const repoName = payload.repository.full_name
+    const count = payload.repository.stargazers_count;
+    const sender = payload.sender.login;
+    const repoName = payload.repository.full_name;
 
-    if (count % config.starThreshold !== 0) return null
+    if (count % config.starThreshold !== 0) return null;
 
-    return h('message', [
+    return h("message", [
       h.text(`⭐ [Star 关注] ${repoName}`),
       h.text(`\n当前 Star 总数: ${count}`),
       h.text(`\n新增关注者: ${sender}`),
-      h.text(`\n链接: ${payload.repository.html_url}`)
-    ])
+      h.text(`\n链接: ${payload.repository.html_url}`),
+    ]);
   }
 }
