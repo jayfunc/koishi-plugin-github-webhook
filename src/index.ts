@@ -42,19 +42,30 @@ export interface Config {
 }
 
 export const Config: Schema<Config> = Schema.object({
-  path: Schema.string()
-    .default("/github/webhook")
-    .description("Webhook 监听路径"),
-  secret: Schema.string()
-    .role("secret")
-    .description("GitHub Webhook Secret (在 GitHub 设置中填写)"),
-  repos: Schema.dict(Schema.array(Schema.string())).description(
-    "仓库映射: 键为 owner/repo，值为 [平台:群号] 列表",
-  ),
-  truncateLength: Schema.number().default(1000).description("正文预览截断长度（默认 1000）"),
-  starThreshold: Schema.number()
-    .default(1)
-    .description("Star 通知阈值：只有当 Star 总数是此数值的倍数时才发送通知。"),
+  path: Schema.string().default("/github/webhook"),
+  secret: Schema.string().role("secret"),
+  repos: Schema.dict(Schema.array(Schema.string())),
+  truncateLength: Schema.number().default(1000),
+  starThreshold: Schema.number().default(1),
+}).i18n({
+  "zh-CN": {
+    dict: {
+      path: "Webhook 监听路径",
+      secret: "GitHub Webhook Secret (在 GitHub 设置中填写)",
+      repos: "仓库映射: 键为 owner/repo，值为 [平台:群号] 列表",
+      truncateLength: "正文预览截断长度（默认 1000）",
+      starThreshold: "Star 通知阈值：只有当 Star 总数是此数值的倍数时才发送通知。",
+    },
+  },
+  "en-US": {
+    dict: {
+      path: "Webhook listening path",
+      secret: "GitHub Webhook Secret (fill this in GitHub settings)",
+      repos: "Repository mapping: key is owner/repo, value is a list of [platform:channelId]",
+      truncateLength: "Body preview truncation length (default 1000)",
+      starThreshold: "Star notification threshold: Only send notifications when the total number of stars is a multiple of this value.",
+    },
+  },
 });
 
 export function apply(ctx: Context, config: Config) {
