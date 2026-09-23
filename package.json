@@ -17,9 +17,13 @@
   ],
   "devDependencies": {
     "@cordisjs/plugin-server": "^0.2.9",
-    "@koishijs/plugin-server": "^3.2.7"
+    "@koishijs/plugin-server": "^3.2.7",
+    "@types/marked": "^5.0.2"
   },
   "peerDependencies": {
     "koishi": "^4.18.7"
+  },
+  "dependencies": {
+    "marked": "^9.1.6"
   }
 }
