@@ -224,7 +224,9 @@ export function apply(ctx: Context, config: Config) {
           }
           .markdown-body img {
             max-width: 100%;
-            box-sizing: content-box;
+            height: auto;
+            object-fit: contain;
+            box-sizing: border-box;
           }
           
           .footer {
@@ -247,9 +249,6 @@ export function apply(ctx: Context, config: Config) {
             ${c.subtitle ? `<span>${c.subtitle.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>` : ''}
           </div>
           ${parsedBody ? `<div class="body markdown-body">${parsedBody}</div>` : ''}
-          <div class="footer">
-            ${c.url}
-          </div>
         </div>
       </body>
       </html>
@@ -322,6 +321,9 @@ export function apply(ctx: Context, config: Config) {
         case "pull_request":
           payloadData = handlePullRequest(payload, config);
           break;
+        case "discussion":
+          payloadData = handleDiscussion(payload, config);
+          break;
         case "release":
           payloadData = handleRelease(payload, config);
           break;
@@ -338,10 +340,13 @@ export function apply(ctx: Context, config: Config) {
 
     if (payloadData) {
       let finalMessage: any = await renderScreenshot(payloadData);
-      if (payloadData.prepend && finalMessage !== payloadData.fallback) {
-        const prepends = Array.isArray(payloadData.prepend) ? payloadData.prepend : [payloadData.prepend];
+      if (finalMessage !== payloadData.fallback) {
+        const prepends = payloadData.prepend ? (Array.isArray(payloadData.prepend) ? payloadData.prepend : [payloadData.prepend]) : [];
+        const appends = payloadData.card?.url ? [h.text(`\n链接: ${payloadData.card.url}`)] : [];
         const finals = Array.isArray(finalMessage) ? finalMessage : [finalMessage];
-        finalMessage = h("message", [...prepends, ...finals]);
+        if (prepends.length > 0 || appends.length > 0) {
+          finalMessage = h("message", [...prepends, ...finals, ...appends]);
+        }
       }
 
       const targets = config.repos[repoName];
@@ -387,10 +392,13 @@ export function apply(ctx: Context, config: Config) {
       const data = handleIssue(payload, config);
       if (!data) return "生成失败";
       const finalMsg = await renderScreenshot(data);
-      if (data.prepend && finalMsg !== data.fallback) {
-        const prepends = Array.isArray(data.prepend) ? data.prepend : [data.prepend];
+      if (finalMsg !== data.fallback) {
+        const prepends = data.prepend ? (Array.isArray(data.prepend) ? data.prepend : [data.prepend]) : [];
+        const appends = data.card?.url ? [h.text(`\n链接: ${data.card.url}`)] : [];
         const finals = Array.isArray(finalMsg) ? finalMsg : [finalMsg];
-        return h("message", [...prepends, ...finals]);
+        if (prepends.length > 0 || appends.length > 0) {
+          return h("message", [...prepends, ...finals, ...appends]);
+        }
       }
       return finalMsg;
     });
@@ -415,10 +423,43 @@ export function apply(ctx: Context, config: Config) {
       const data = handlePullRequest(payload, config);
       if (!data) return "生成失败";
       const finalMsg = await renderScreenshot(data);
-      if (data.prepend && finalMsg !== data.fallback) {
-        const prepends = Array.isArray(data.prepend) ? data.prepend : [data.prepend];
+      if (finalMsg !== data.fallback) {
+        const prepends = data.prepend ? (Array.isArray(data.prepend) ? data.prepend : [data.prepend]) : [];
+        const appends = data.card?.url ? [h.text(`\n链接: ${data.card.url}`)] : [];
         const finals = Array.isArray(finalMsg) ? finalMsg : [finalMsg];
-        return h("message", [...prepends, ...finals]);
+        if (prepends.length > 0 || appends.length > 0) {
+          return h("message", [...prepends, ...finals, ...appends]);
+        }
+      }
+      return finalMsg;
+    });
+
+  cmd
+    .subcommand(".test-discussion [repo:string]", "模拟 Discussion 事件")
+    .action(async ({ session }, repo = "koishi/test-repo") => {
+      await session.send("正在生成测试 Discussion...");
+      const payload = {
+        action: "created",
+        repository: { full_name: repo },
+        discussion: {
+          number: Math.floor(Math.random() * 1000),
+          title: "这是一个测试的讨论话题",
+          html_url: `https://github.com/${repo}/discussions/1`,
+          body: "这里是关于某个新特性的讨论内容。大家觉得怎么样？",
+          category: { name: "Ideas" }
+        },
+        sender: { login: session.username || "TestUser" },
+      };
+      const data = handleDiscussion(payload, config);
+      if (!data) return "生成失败";
+      const finalMsg = await renderScreenshot(data);
+      if (finalMsg !== data.fallback) {
+        const prepends = data.prepend ? (Array.isArray(data.prepend) ? data.prepend : [data.prepend]) : [];
+        const appends = data.card?.url ? [h.text(`\n链接: ${data.card.url}`)] : [];
+        const finals = Array.isArray(finalMsg) ? finalMsg : [finalMsg];
+        if (prepends.length > 0 || appends.length > 0) {
+          return h("message", [...prepends, ...finals, ...appends]);
+        }
       }
       return finalMsg;
     });
@@ -441,10 +482,13 @@ export function apply(ctx: Context, config: Config) {
       const data = handleRelease(payload, config);
       if (!data) return "生成失败";
       const finalMsg = await renderScreenshot(data);
-      if (data.prepend && finalMsg !== data.fallback) {
-        const prepends = Array.isArray(data.prepend) ? data.prepend : [data.prepend];
+      if (finalMsg !== data.fallback) {
+        const prepends = data.prepend ? (Array.isArray(data.prepend) ? data.prepend : [data.prepend]) : [];
+        const appends = data.card?.url ? [h.text(`\n链接: ${data.card.url}`)] : [];
         const finals = Array.isArray(finalMsg) ? finalMsg : [finalMsg];
-        return h("message", [...prepends, ...finals]);
+        if (prepends.length > 0 || appends.length > 0) {
+          return h("message", [...prepends, ...finals, ...appends]);
+        }
       }
       return finalMsg;
     });
@@ -469,10 +513,13 @@ export function apply(ctx: Context, config: Config) {
       config.starThreshold = originalThreshold; // 恢复
       if (!data) return "未触发通知（可能未达到阈值）";
       const finalMsg = await renderScreenshot(data);
-      if (data.prepend && finalMsg !== data.fallback) {
-        const prepends = Array.isArray(data.prepend) ? data.prepend : [data.prepend];
+      if (finalMsg !== data.fallback) {
+        const prepends = data.prepend ? (Array.isArray(data.prepend) ? data.prepend : [data.prepend]) : [];
+        const appends = data.card?.url ? [h.text(`\n${data.card.url}`)] : [];
         const finals = Array.isArray(finalMsg) ? finalMsg : [finalMsg];
-        return h("message", [...prepends, ...finals]);
+        if (prepends.length > 0 || appends.length > 0) {
+          return h("message", [...prepends, ...finals, ...appends]);
+        }
       }
       return finalMsg;
     });
@@ -572,6 +619,52 @@ export function apply(ctx: Context, config: Config) {
         subtitle: `分支: ${pull_request.head.ref} &rarr; ${pull_request.base.ref}`,
         url: pull_request.html_url,
         body: action === "opened" ? pull_request.body : undefined,
+        accentColor: statusColor
+      }
+    };
+  }
+
+  function handleDiscussion(payload: any, config: Config): WebhookPayloadData | null {
+    const { action, discussion, repository, sender } = payload;
+    if (!["created", "answered"].includes(action)) return null;
+
+    let statusCN = "";
+    let statusColor = "#0078D4";
+    if (action === "created") {
+      statusCN = "已创建";
+      statusColor = "#238636";
+    } else if (action === "answered") {
+      statusCN = "已解答";
+      statusColor = "#8957E5";
+    }
+
+    const textParts = [
+      `[讨论 Discussion] ${repository.full_name} #${discussion.number}`,
+      `标题: ${discussion.title}`,
+      `分类: ${discussion.category.name}`,
+      `状态: ${statusCN}`,
+      `操作者: ${sender.login}`,
+      `链接: ${discussion.html_url}`
+    ];
+    if (action === "created") {
+      textParts.push(`\n=== 内容摘要 ===\n${truncate(discussion.body)}`);
+    }
+    const textContent = textParts.join('\n');
+
+    return {
+      text: textContent,
+      fallback: h("message", [h.text(textContent)]),
+      prepend: h.text(`[讨论 Discussion] ${repository.full_name} #${discussion.number}\n标题: ${discussion.title}\n`),
+      card: {
+        type: "Discussion",
+        title: discussion.title,
+        repo: `${repository.full_name} #${discussion.number}`,
+        status: statusCN,
+        statusColor: statusColor,
+        author: sender.login,
+        subtitle: `分类: ${discussion.category.name}`,
+        url: discussion.html_url,
+        body: action === "created" ? discussion.body : undefined,
         accentColor: statusColor
       }
     };
