@@ -115,6 +115,20 @@ export function apply(ctx: Context, config: Config) {
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.04), 0 0 2px rgba(0, 0, 0, 0.06);
             padding: 24px;
             border-top: 4px solid var(--accent, #0078D4);
+            max-height: 6000px; /* 防止内容过长导致截图内存溢出浏览器崩溃 */
+            overflow: hidden;
+            position: relative;
+          }
+          /* 底部渐变遮罩提示被截断的内容 */
+          .card::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,1));
+            pointer-events: none;
           }
           .header {
             display: flex;
@@ -268,8 +282,22 @@ export function apply(ctx: Context, config: Config) {
     }
 
     try {
-      const imageStr = await ctx.puppeteer.render(html);
-      return h.parse(imageStr);
+      const page = await ctx.puppeteer.page();
+      try {
+        await page.setViewport({ width: 764, height: 100, devicePixelRatio: 2 });
+        // 使用 networkidle0 并设置超时。如果超时则捕获异常，继续截取已加载的内容，避免抛错。
+        try {
+          await page.setContent(html, { waitUntil: 'networkidle0', timeout: 8000 });
+        } catch (e) {
+          // 忽略超时错误，渲染已有的内容
+        }
+        const body = await page.$("body");
+        const clip = body ? await body.boundingBox() : null;
+        const buffer = await page.screenshot({ clip: clip || undefined });
+        return h.image(buffer, 'image/png');
+      } finally {
+        await page?.close();
+      }
     } catch (e) {
       ctx.logger("github-webhook").warn("Screenshot rendering failed, falling back to text:", e);
       return payloadData.fallback;
