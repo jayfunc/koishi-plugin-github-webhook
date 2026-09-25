@@ -4,11 +4,11 @@
 
 [English](./README.md) | 中文文档
 
-一个功能强大的 Koishi GitHub Webhook 插件。支持多仓库分发、密钥验证，并且**使用 Puppeteer 将 Issue、PR、Release 以及 Star 的动态以 Fluent Design 风格渲染为美观的卡片长图**发送，避免文字刷屏且完美保留 Markdown 格式！
+一个功能强大的 Koishi GitHub Webhook 插件。支持多仓库分发、密钥验证，并且**使用 Puppeteer 将 Issue、PR、Discussion、Release 以及 Star 的动态以 Fluent Design 风格渲染为美观的卡片长图**发送，避免文字刷屏且完美保留 Markdown 格式！
 
 ## ✨ 功能特性
 
-* **多事件支持**：支持 `Issue`、`Pull Request`、`Release`、`Star` 事件推送。
+* **多事件支持**：支持 `Issue`、`Pull Request`、`Discussion`、`Release`、`Star` 事件推送。
 * **Fluent Design 卡片渲染**：自动将推送事件（包含正文的 Markdown 内容）渲染为微软 Fluent 风格的精美卡片长图发送。
 * **优雅降级**：如果未配置截图服务或截图失败，插件会自动降级为纯文本格式发送，防止漏发。
 * **安全验证**：支持 GitHub Webhook Secret 签名验证（HMAC SHA-256）。
@@ -73,6 +73,7 @@ plugins:
     * **Secret**: 填写你在插件配置中设置的 `secret`。
 4.  **Which events would you like to trigger this webhook?**
     * 建议选择 **Let me select individual events**，并勾选：
+        * Discussions
         * Issues
         * Pull requests
         * Releases
@@ -84,6 +85,7 @@ plugins:
 为方便调试，插件提供了几个用于模拟 GitHub Webhook 推送的测试指令（默认 `authority: 1` 即可使用）：
 - `gh .test-issue [repo]`：模拟 Issue 事件
 - `gh .test-pr [repo]`：模拟 Pull Request 事件
+- `gh .test-discussion [repo]`：模拟 Discussion 事件
 - `gh .test-release [repo]`：模拟 Release 事件
 - `gh .test-star [repo] [count]`：模拟 Star 事件
 

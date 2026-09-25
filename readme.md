@@ -4,11 +4,11 @@
 
 English | [中文文档](./README.CN.md)
 
-A powerful GitHub Webhook plugin for Koishi. It supports multi-repository routing, secret verification, and **uses Puppeteer to render Issues, Pull Requests, Releases, and Stars into beautiful Fluent Design-style long screenshot cards**, avoiding text flooding while perfectly preserving Markdown formatting!
+A powerful GitHub Webhook plugin for Koishi. It supports multi-repository routing, secret verification, and **uses Puppeteer to render Issues, Pull Requests, Discussions, Releases, and Stars into beautiful Fluent Design-style long screenshot cards**, avoiding text flooding while perfectly preserving Markdown formatting!
 
 ## ✨ Features
 
-* **Multi-event Support**: Supports `Issue`, `Pull Request`, `Release`, and `Star` push events.
+* **Multi-event Support**: Supports `Issue`, `Pull Request`, `Discussion`, `Release`, and `Star` push events.
 * **Fluent Design Card Rendering**: Automatically renders push events (including the Markdown body text) into elegant Microsoft Fluent-style long screenshot cards.
 * **Graceful Degradation**: If the screenshot service is not configured or screenshot generation fails, the plugin automatically falls back to plain text format to prevent missed notifications.
 * **Security Verification**: Supports GitHub Webhook Secret verification (HMAC SHA-256).
@@ -73,6 +73,7 @@ plugins:
     * **Secret**: Enter the `secret` matching your plugin config.
 4.  **Which events would you like to trigger this webhook?**
     * It is recommended to choose **Let me select individual events**, and check:
+        * Discussions
         * Issues
         * Pull requests
         * Releases
@@ -84,6 +85,7 @@ plugins:
 For easier debugging, the plugin provides simulation commands (usable by default with `authority: 1`):
 - `gh .test-issue [repo]`：Simulate an Issue event
 - `gh .test-pr [repo]`：Simulate a Pull Request event
+- `gh .test-discussion [repo]`：Simulate a Discussion event
 - `gh .test-release [repo]`：Simulate a Release event
 - `gh .test-star [repo] [count]`：Simulate a Star event
 
